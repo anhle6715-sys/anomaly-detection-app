@@ -1,42 +1,52 @@
-from flask import Flask, request, render_template_string
-import numpy as np
+import streamlit as st
 import pandas as pd
-from sklearn.ensemble import IsolationForest
+import numpy as np
+import joblib
 
-app = Flask(__name__)
+# -------------------------------
+# Load model
+# -------------------------------
+@st.cache_resource
+def load_model():
+    model = joblib.load("model.pkl")  # Thay bằng file model của bạn
+    return model
 
-# HTML template đơn giản
-HTML_PAGE = """
-<!doctype html>
-<title>Anomaly Detection Demo</title>
-<h2>Nhập dữ liệu (cách nhau bằng dấu phẩy):</h2>
-<form method=post>
-  <input type=text name=data style="width:300px">
-  <input type=submit value=Check>
-</form>
-{% if result is not none %}
-  <h3>Kết quả: {{ result }}</h3>
-{% endif %}
-"""
+model = load_model()
 
-# Model anomaly detection
-model = IsolationForest(contamination=0.2, random_state=42)
-# Train thử với dữ liệu random
-train_data = np.random.randn(100, 1)
-model.fit(train_data)
+# -------------------------------
+# Streamlit UI
+# -------------------------------
+st.title("Anomaly Detection App")
 
-@app.route("/", methods=["GET", "POST"])
-def index():
-    result = None
-    if request.method == "POST":
-        try:
-            values = [float(x) for x in request.form["data"].split(",")]
-            values = np.array(values).reshape(-1, 1)
-            prediction = model.predict(values)
-            result = ["Bình thường" if p == 1 else "Bất thường" for p in prediction]
-        except:
-            result = "Lỗi dữ liệu nhập"
-    return render_template_string(HTML_PAGE, result=result)
+st.write("Upload your CSV file to detect anomalies.")
 
-if __name__ == "__main__":
-    app.run(debug=True)
+# Upload file
+uploaded_file = st.file_uploader("Choose a CSV file", type=["csv"])
+
+if uploaded_file is not None:
+    # Đọc dữ liệu
+    data = pd.read_csv(uploaded_file)
+    st.write("### Data Preview")
+    st.dataframe(data.head())
+
+    # Nút dự đoán
+    if st.button("Detect Anomalies"):
+        # Giả sử model là IsolationForest hoặc tương tự
+        predictions = model.predict(data)
+
+        # -1 = anomaly, 1 = normal
+        data["Anomaly"] = ["Anomaly" if x == -1 else "Normal" for x in predictions]
+
+        st.write("### Detection Results")
+        st.dataframe(data)
+
+        # Tải về file kết quả
+        csv = data.to_csv(index=False)
+        st.download_button(
+            label="Download Results",
+            data=csv,
+            file_name="anomaly_detection_results.csv",
+            mime="text/csv"
+        )
+
+
